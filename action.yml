@@ -2,7 +2,7 @@ name: ESPHome Builder
 description: Builds ESPHome binaries
 
 inputs:
-  yaml_file:
+  yaml-file:
     description: YAML file to use
     required: true
   version:
@@ -13,18 +13,18 @@ inputs:
     description: Platform (OS/Arch) to use
     required: false
     default: linux/amd64
-  cache:
-    description: Cache build directory
-    required: false
-    default: false
-  release_summary:
+  release-summary:
     description: Release summary
     required: false
     default: ""
-  release_url:
+  release-url:
     description: Release URL
     required: false
     default: ""
+  complete-manifest:
+    description: Output complete esp-web-tools manifest.json
+    required: false
+    default: false
 
 outputs:
   name:
@@ -33,68 +33,57 @@ outputs:
   version:
     description: ESPHome version
     value: ${{ steps.build-step.outputs.esphome-version }}
-  original_name:
+  original-name:
     description: Original name of device extracted from configuration
-    value: ${{ steps.build-step.outputs.original_name }}
+    value: ${{ steps.build-step.outputs.original-name }}
+  project-name:
+    description: Project name extracted from configuration
+    value: ${{ steps.build-step.outputs.project-name }}
+  project-version:
+    description: Project version extracted from configuration
+    value: ${{ steps.build-step.outputs.project-version }}
 
 runs:
   using: composite
   steps:
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3.0.0
+      uses: docker/setup-qemu-action@v3.6.0
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3.3.0
+      uses: docker/setup-buildx-action@v3.10.0
       with:
         platforms: ${{ inputs.platform }}
     - name: Build ESPHome image
-      uses: docker/build-push-action@v5.3.0
+      uses: docker/build-push-action@v6.15.0
+      env:
+        DOCKER_BUILD_SUMMARY: false
+        DOCKER_BUILD_RECORD_UPLOAD: false
       with:
         context: ${{ github.action_path }}
         load: true
         tags: esphome:${{ inputs.version }}
         build-args: VERSION=${{ inputs.version }}
         platforms: ${{ inputs.platform }}
-    - if: ${{ inputs.cache == 'true' }}
-      id: data-dir
-      shell: bash
-      run: |
-        data_dir=$(dirname ${{ inputs.yaml_file }})/.esphome
-        echo "data_dir=$data_dir" >> $GITHUB_OUTPUT
-    - if: ${{ inputs.cache == 'true' }}
-      name: Cache platformio directory
-      uses: actions/cache@v4.0.2
-      with:
-        path: ~/.platformio
-        key: ${{ runner.os }}-esphome-${{ inputs.yaml_file }}-${{ inputs.version }}-platformio
-    - if: ${{ inputs.cache == 'true' }}
-      name: Cache build directory
-      uses: actions/cache@v4.0.2
-      with:
-        path: ${{ steps.data-dir.outputs.data_dir }}/build
-        key: ${{ runner.os }}-esphome-${{ inputs.yaml_file }}-${{ inputs.version }}-build
-        save-always: true
-    - if: ${{ inputs.cache == 'true' }}
-      name: Cache storage directory
-      uses: actions/cache@v4.0.2
-      with:
-        path: ${{ steps.data-dir.outputs.data_dir }}/storage
-        key: ${{ runner.os }}-esphome-${{ inputs.yaml_file }}-${{ inputs.version }}-storage
-        save-always: true
     - name: Run container
       shell: bash
       id: build-step
       run: |-
+        summary=$(cat <<'ENDOFSUMMARY'
+        ${{ inputs.release-summary }}
+        ENDOFSUMMARY
+        )
+
         docker run --rm \
-        --platform ${{ inputs.platform }} \
-        --workdir /github/workspace \
-        -v "$(pwd)":"/github/workspace" -v "$HOME:$HOME" \
-        --user $(id -u):$(id -g) \
-        -e HOME \
-        esphome:${{ inputs.version }} \
-        ${{ inputs.yaml_file }} \
-        --release-summary "${{ inputs.release_summary }}" \
-        --release-url "${{ inputs.release_url }}" \
-        --outputs-file "$GITHUB_OUTPUT"
+          --platform ${{ inputs.platform }} \
+          --workdir /github/workspace \
+          -v "$(pwd)":"/github/workspace" -v "$HOME:$HOME" \
+          --user $(id -u):$(id -g) \
+          -e HOME \
+          esphome:${{ inputs.version }} \
+            ${{ inputs.yaml-file }} \
+            --release-summary "$summary" \
+            --release-url "${{ inputs.release-url }}" \
+            --outputs-file "$GITHUB_OUTPUT" \
+            ${{ inputs.complete-manifest == 'true' && '--complete-manifest' || '--partial-manifest' }}
 
 branding:
   icon: "archive"
