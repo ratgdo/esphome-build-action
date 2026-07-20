@@ -76,6 +76,7 @@ runs:
           -v "$(pwd)":"/github/workspace" -v "$HOME:$HOME" \
           --user $(id -u):$(id -g) \
           -e HOME \
+          -e CCACHE_DIR \
           esphome:${{ inputs.version }} \
             ${{ inputs.yaml-file }} \
             --release-summary "$summary" \
